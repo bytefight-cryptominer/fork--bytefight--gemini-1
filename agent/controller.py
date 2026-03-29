@@ -120,14 +120,13 @@ class PlayerController:
 
             if cell.hill_id and cell.hill_id != 0:
                 hill = board.hills[cell.hill_id]
-                # Scale hill priority with game progress (territory first, then hills)
-                turn_scale = min(1.0, board.turn_count / 150)
-                hill_base = int(1200 + 800 * turn_scale)
+                # Early game hill rush bonus (fades by turn 300)
+                rush_bonus = max(0, 500 - board.turn_count * 500 // 300)
                 if hill.controller_parity != player_parity:
                     if cell.owner_parity != player_parity:
-                        priority = hill_base - depth * 20
+                        priority = 2000 + rush_bonus - depth * 20
                     else:
-                        priority = (hill_base - 1000) - depth * 20
+                        priority = 1000 + rush_bonus - depth * 20
                 elif cell.owner_parity == 0:
                     priority = 800 - depth * 15
 
