@@ -70,6 +70,27 @@ class PlayerController:
                     count += 1
             return count
 
+        # --- Beacon teleport: defend threatened hills ---
+        current_cell = board.cells[my_r][my_c]
+        if (me.beacon_count >= 2 and
+            current_cell.beacon_parity == player_parity):
+            # We're on a beacon. Check if any controlled hill needs defense.
+            for hill_id in me.controlled_hills:
+                hill = board.hills[hill_id]
+                threat = False
+                for loc in hill.cells:
+                    if board.cells[loc.r][loc.c].owner_parity == self.opp:
+                        threat = True
+                        break
+                if threat:
+                    # Find our OTHER beacon to teleport to
+                    for br in range(rows):
+                        for bc in range(cols):
+                            if (board.cells[br][bc].beacon_parity == player_parity and
+                                (br, bc) != (my_r, my_c)):
+                                return [Action.Move(None, move_type=MoveType.BEACON_TRAVEL,
+                                                    beacon_target=Location(br, bc))]
+
         # --- Erase step for hill cells with opponent paint ---
         # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
         if stamina >= 55:  # 40 erase + 15 paint buffer
@@ -177,24 +198,32 @@ class PlayerController:
         if not valid(new_r, new_c):
             return [Action.Move(best_first_dir)]
 
-        # Beacon placement: place on captured hill cells when 3x3 is controlled
+        # Beacon placement strategy:
+        # Beacon 1: on captured hill cell (strategic defense anchor)
+        # Beacon 2: on frontier territory (teleportation origin)
         place_beacon = False
+        def can_place_at(r, c):
+            f, v = 0, 0
+            for dr2 in range(-1, 2):
+                for dc2 in range(-1, 2):
+                    br, bc = r + dr2, c + dc2
+                    if 0 <= br < rows and 0 <= bc < cols and not board.cells[br][bc].is_wall:
+                        v += 1
+                        if board.cells[br][bc].owner_parity == player_parity:
+                            f += 1
+            return v > 0 and f * 9 >= 6 * v
+
         if me.beacon_count == 0 and board.turn_count > 50:
             new_cell = board.cells[new_r][new_c]
-            # Only place on hill cells we control (strategic anchor)
             if (new_cell.hill_id and new_cell.hill_id != 0 and
-                new_cell.owner_parity == player_parity):
-                friendly = 0
-                valid_count = 0
-                for dr2 in range(-1, 2):
-                    for dc2 in range(-1, 2):
-                        br, bc = new_r + dr2, new_c + dc2
-                        if 0 <= br < rows and 0 <= bc < cols and not board.cells[br][bc].is_wall:
-                            valid_count += 1
-                            if board.cells[br][bc].owner_parity == player_parity:
-                                friendly += 1
-                if valid_count > 0 and friendly * 9 >= 6 * valid_count:
-                    place_beacon = True
+                new_cell.owner_parity == player_parity and
+                can_place_at(new_r, new_c)):
+                place_beacon = True
+        elif me.beacon_count == 1 and board.turn_count > 200:
+            # Place 2nd beacon at current expansion area
+            if (board.cells[new_r][new_c].owner_parity == player_parity and
+                can_place_at(new_r, new_c)):
+                place_beacon = True
 
         actions.append(Action.Move(best_first_dir, place_beacon=place_beacon))
 
