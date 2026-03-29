@@ -2,17 +2,14 @@ from collections.abc import Callable, Iterable
 from collections import deque
 from typing import Union, List
 
-import numpy as np
-
 from game import *
 
 
 class PlayerController:
     """
-    v39: Numpy-enhanced agent with Voronoi-aware BFS.
-    Uses numpy distance maps to prefer directions that maximize
-    our reachable territory (cells closer to us than opponent).
-    Keeps erase-step from v23.
+    v10: Comprehensive territory-control agent.
+    Combines: adaptive safety, collision pursuit, powerup collection,
+    late-game conservation.
     """
 
     def __init__(self, player_parity: int, time_left: Callable):
@@ -21,21 +18,6 @@ class PlayerController:
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
         return 0
-
-    def _bfs_dist(self, board, start_r, start_c, rows, cols):
-        """BFS distance map from a position, respecting walls."""
-        dist = np.full((rows, cols), 9999, dtype=np.int32)
-        dist[start_r][start_c] = 0
-        q = deque([(start_r, start_c)])
-        while q:
-            r, c = q.popleft()
-            d = dist[r][c]
-            for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
-                nr, nc = r+dr, c+dc
-                if 0 <= nr < rows and 0 <= nc < cols and not board.cells[nr][nc].is_wall and dist[nr][nc] > d+1:
-                    dist[nr][nc] = d + 1
-                    q.append((nr, nc))
-        return dist
 
     def play(
         self,
@@ -66,6 +48,7 @@ class PlayerController:
         def cell_owner(r, c):
             return board.cells[r][c].owner_parity
 
+        # Adaptive safety based on stamina advantage
         stamina_diff = stamina - opp_stamina
         if stamina_diff > 30:
             SAFE_DIST = 3
@@ -88,7 +71,8 @@ class PlayerController:
             return count
 
         # --- Erase step for hill cells with opponent paint ---
-        if stamina >= 55:
+        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
+        if stamina >= 55:  # 40 erase + 15 paint buffer
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
@@ -100,11 +84,7 @@ class PlayerController:
                         continue
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
-        # --- Compute distance maps for Voronoi scoring ---
-        my_dist = self._bfs_dist(board, my_r, my_c, rows, cols)
-        opp_dist = self._bfs_dist(board, opp_r, opp_c, rows, cols)
-
-        # --- BFS with Voronoi-enhanced scoring ---
+        # --- BFS ---
         best_first_dir = None
         best_priority = -999999
 
@@ -118,6 +98,7 @@ class PlayerController:
                 continue
             d_opp = mdist(nr, nc, opp_r, opp_c)
 
+            # Collision pursuit: mover wins on neutral
             if nr == opp_r and nc == opp_c:
                 if cell_owner(nr, nc) == self.opp:
                     continue
@@ -141,11 +122,11 @@ class PlayerController:
                 hill = board.hills[cell.hill_id]
                 if hill.controller_parity != player_parity:
                     if cell.owner_parity != player_parity:
-                        priority = 2000 - depth * 20
+                        priority = 3000 - depth * 20  # EXTREME hill aggression
                     else:
-                        priority = 1000 - depth * 20
+                        priority = 1500 - depth * 20
                 elif cell.owner_parity == 0:
-                    priority = 800 - depth * 15
+                    priority = 1000 - depth * 15
 
             if cell.powerup:
                 pup_val = 1500 - depth * 25
@@ -154,17 +135,12 @@ class PlayerController:
                 priority = max(priority, pup_val)
 
             if cell.owner_parity == 0 and priority < -900:
-                priority = 900 - depth * 20
-                # Voronoi bonus: prefer neutral cells we can reach before opponent
-                if my_dist[r][c] < opp_dist[r][c]:
-                    priority += 50  # we'll reach this first
-                elif my_dist[r][c] > opp_dist[r][c] + 2:
-                    priority -= 100  # opponent reaches well before us
+                priority = 700 - depth * 20  # Lower neutral priority
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - depth * 15
+                    priority = 400 - depth * 15  # Slightly higher for territory contest
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
@@ -202,6 +178,7 @@ class PlayerController:
         if not valid(new_r, new_c):
             return actions
 
+        # Late game conservation
         reserve = 25 if board.turn_count > 1400 else 10
         paint_budget = stamina - reserve
         paint_spent = 0
