@@ -112,7 +112,7 @@ class PlayerController:
 
         while queue:
             r, c, first_dir, depth = queue.popleft()
-            if depth > 25:
+            if depth > 20:
                 break
 
             cell = board.cells[r][c]
@@ -135,12 +135,12 @@ class PlayerController:
                 priority = max(priority, pup_val)
 
             if cell.owner_parity == 0 and priority < -900:
-                priority = 900 - depth * 30  # steeper penalty for distant neutral
+                priority = 900 - depth * 20
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - depth * 20  # steeper for enemy too
+                    priority = 300 - depth * 15
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
@@ -149,7 +149,7 @@ class PlayerController:
                 best_priority = priority
                 best_first_dir = first_dir
 
-            if depth < 25:
+            if depth < 20:
                 for dr, dc in DR:
                     nr, nc = r + dr, c + dc
                     if (nr, nc) in visited or not valid(nr, nc):
