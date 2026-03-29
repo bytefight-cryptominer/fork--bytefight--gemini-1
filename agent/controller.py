@@ -17,7 +17,7 @@ class PlayerController:
         self.opp = -player_parity
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
-        return 1
+        return 0
 
     def play(
         self,
@@ -70,16 +70,17 @@ class PlayerController:
                     count += 1
             return count
 
-        # --- Erase step for hill cells with opponent paint ---
-        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
-        if stamina >= 55:  # 40 erase + 15 paint buffer
+        # --- Erase step for hill cells with 2+ layers of opponent paint ---
+        # Only use erase (40 stamina) on thick paint; 1-layer is cleared by free regular step
+        if stamina >= 50:
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
                     continue
                 ecell = board.cells[nr][nc]
                 if (ecell.hill_id and ecell.hill_id != 0 and
-                    ecell.owner_parity == self.opp):
+                    ecell.owner_parity == self.opp and
+                    abs(ecell.paint_value) >= 2):
                     if nr == opp_r and nc == opp_c:
                         continue
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
@@ -217,4 +218,4 @@ class PlayerController:
         return actions
 
     def commentate(self, board: Board, player_parity: int, time_left: Callable) -> str:
-        return "v25"
+        return ""
