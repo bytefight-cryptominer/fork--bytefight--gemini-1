@@ -86,16 +86,7 @@ class PlayerController:
                 if 0 <= nr < rows and 0 <= nc < cols:
                     if board.cells[nr][nc].owner_parity == player_parity:
                         local += 2
-        # Hill proximity bonus: closer to uncaptured hills = better
-        hill_proximity = 0
-        for hid, hill in board.hills.items():
-            if hill.controller_parity != player_parity and hid != 0:
-                for loc in hill.cells:
-                    if board.cells[loc.r][loc.c].owner_parity != player_parity:
-                        d = abs(me.loc.r - loc.r) + abs(me.loc.c - loc.c)
-                        hill_proximity = max(hill_proximity, 100 - d * 5)
-                        break
-        return territory + hills + local + me.stamina * 0.1 + hill_proximity
+        return territory + hills + local + me.stamina * 0.1
 
     def play(
         self,
@@ -258,4 +249,4 @@ class PlayerController:
         return [Action.Move(Direction.UP)]
 
     def commentate(self, board: Board, player_parity: int, time_left: Callable) -> str:
-        return ""
+        return "v45c"
