@@ -61,6 +61,8 @@ class PlayerController:
                 if is_behind:
                     pscore += 200
             else:
+                if pcell.hill_id == 0:
+                    continue
                 pscore += 10
                 if is_behind:
                     pscore += 30
