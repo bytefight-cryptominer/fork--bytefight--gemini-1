@@ -112,7 +112,7 @@ class PlayerController:
 
         while queue:
             r, c, first_dir, depth = queue.popleft()
-            if depth > 20:
+            if depth > 25:
                 break
 
             cell = board.cells[r][c]
@@ -135,21 +135,12 @@ class PlayerController:
                 priority = max(priority, pup_val)
 
             if cell.owner_parity == 0 and priority < -900:
-                priority = 900 - depth * 20
-                # Boost cells adjacent to uncaptured hills (approach paths)
-                for dr2, dc2 in DR:
-                    ar, ac = r + dr2, c + dc2
-                    if 0 <= ar < rows and 0 <= ac < cols:
-                        acell = board.cells[ar][ac]
-                        if acell.hill_id and acell.hill_id != 0:
-                            if board.hills[acell.hill_id].controller_parity != player_parity:
-                                priority += 150
-                                break
+                priority = 900 - depth * 30  # steeper penalty for distant neutral
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - depth * 15
+                    priority = 300 - depth * 20  # steeper for enemy too
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
@@ -158,7 +149,7 @@ class PlayerController:
                 best_priority = priority
                 best_first_dir = first_dir
 
-            if depth < 20:
+            if depth < 25:
                 for dr, dc in DR:
                     nr, nc = r + dr, c + dc
                     if (nr, nc) in visited or not valid(nr, nc):
