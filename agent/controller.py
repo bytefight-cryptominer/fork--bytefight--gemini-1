@@ -185,7 +185,12 @@ class PlayerController:
 
             if cell.hill_id and cell.hill_id != 0:
                 hill = board.hills[cell.hill_id]
-                if hill.controller_parity != player_parity:
+                if hill.controller_parity == self.opp:
+                    if cell.owner_parity != player_parity:
+                        priority = 2500 - depth * 20
+                    else:
+                        priority = 1200 - depth * 20
+                elif hill.controller_parity == 0:
                     if cell.owner_parity != player_parity:
                         priority = 2000 - depth * 20
                     else:
