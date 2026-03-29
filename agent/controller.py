@@ -70,17 +70,16 @@ class PlayerController:
                     count += 1
             return count
 
-        # --- Erase step for hill cells with 2+ layers of opponent paint ---
-        # Only use erase (40 stamina) on thick paint; 1-layer is cleared by free regular step
-        if stamina >= 50:
+        # --- Erase step for hill cells with opponent paint ---
+        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
+        if stamina >= 55:  # 40 erase + 15 paint buffer
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
                     continue
                 ecell = board.cells[nr][nc]
                 if (ecell.hill_id and ecell.hill_id != 0 and
-                    ecell.owner_parity == self.opp and
-                    abs(ecell.paint_value) >= 2):
+                    ecell.owner_parity == self.opp):
                     if nr == opp_r and nc == opp_c:
                         continue
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
@@ -179,8 +178,8 @@ class PlayerController:
         if not valid(new_r, new_c):
             return actions
 
-        # Late game conservation
-        reserve = 25 if board.turn_count > 1400 else 10
+        # Paint budget
+        reserve = 10
         paint_budget = stamina - reserve
         paint_spent = 0
 
