@@ -107,43 +107,40 @@ class PlayerController:
             if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
                 continue
 
-            # eff_depth penalizes paths through own territory
-            eff = 2 if cell_owner(nr, nc) == player_parity else 1
             visited.add((nr, nc))
-            queue.append((nr, nc, DIR_MAP[(dr, dc)], 1, eff))
+            queue.append((nr, nc, DIR_MAP[(dr, dc)], 1))
 
         while queue:
-            r, c, first_dir, depth, eff_depth = queue.popleft()
+            r, c, first_dir, depth = queue.popleft()
             if depth > 20:
                 break
 
             cell = board.cells[r][c]
             priority = -999999
 
-            # Use eff_depth for scoring (penalizes paths through own territory)
             if cell.hill_id and cell.hill_id != 0:
                 hill = board.hills[cell.hill_id]
                 if hill.controller_parity != player_parity:
                     if cell.owner_parity != player_parity:
-                        priority = 2000 - eff_depth * 20
+                        priority = 2000 - depth * 20
                     else:
-                        priority = 1000 - eff_depth * 20
+                        priority = 1000 - depth * 20
                 elif cell.owner_parity == 0:
-                    priority = 800 - eff_depth * 15
+                    priority = 800 - depth * 15
 
             if cell.powerup:
-                pup_val = 1500 - eff_depth * 25
+                pup_val = 1500 - depth * 25
                 if stamina < 60:
                     pup_val += 300
                 priority = max(priority, pup_val)
 
             if cell.owner_parity == 0 and priority < -900:
-                priority = 900 - eff_depth * 20
+                priority = 900 - depth * 20
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - eff_depth * 15
+                    priority = 300 - depth * 15
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
@@ -160,10 +157,8 @@ class PlayerController:
                     d_opp = mdist(nr, nc, opp_r, opp_c)
                     if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
                         continue
-                    # Paths through own territory get penalized in scoring
-                    new_eff = eff_depth + (2 if cell_owner(nr, nc) == player_parity else 1)
                     visited.add((nr, nc))
-                    queue.append((nr, nc, first_dir, depth + 1, new_eff))
+                    queue.append((nr, nc, first_dir, depth + 1))
 
         if best_first_dir is None:
             for dr, dc in DR:
@@ -208,6 +203,8 @@ class PlayerController:
                 pscore += 150
             if pcell.owner_parity == 0:
                 pscore += 100
+            elif pcell.hill_id and pcell.hill_id != 0:
+                pscore += 80  # reinforce hill cells to protect against erasure
             else:
                 pscore += 10
             paint_candidates.append((pscore, pr, pc))
