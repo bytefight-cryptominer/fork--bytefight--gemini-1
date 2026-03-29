@@ -1,7 +1,6 @@
 from collections.abc import Callable, Iterable
 from collections import deque
 from typing import Union, List
-import random
 
 from game import *
 
@@ -35,7 +34,6 @@ class PlayerController:
         opp_stamina = opp.stamina
 
         DR = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        random.shuffle(DR)  # Break directional bias in BFS tiebreaks
         DIR_MAP = {(-1, 0): Direction.UP, (1, 0): Direction.DOWN,
                    (0, -1): Direction.LEFT, (0, 1): Direction.RIGHT}
         INV_DIR = {Direction.UP: (-1, 0), Direction.DOWN: (1, 0),
