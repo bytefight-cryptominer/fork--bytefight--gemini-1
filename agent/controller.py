@@ -251,14 +251,50 @@ class PlayerController:
                 continue
             if d_opp == 0:
                 continue
-            # Simulate
+            # Simulate 1st ply
             try:
-                sim_board, ok = board.forecast_turn(player_parity, actions)
-                if ok:
-                    score = self._eval_board(sim_board, player_parity)
-                    if score > best_eval:
-                        best_eval = score
-                        best_actions = actions
+                sim_board_1, ok_1 = board.forecast_turn(player_parity, actions)
+                if not ok_1:
+                    continue
+                
+                # Evaluate 2nd ply
+                max_ply2_eval = -999999
+                sim_me = sim_board_1.get_player(player_parity)
+                sim_my_r, sim_my_c = sim_me.loc.r, sim_me.loc.c
+                sim_stamina = sim_me.stamina
+                
+                sim_opp = sim_board_1.get_opponent(player_parity)
+                sim_opp_r, sim_opp_c = sim_opp.loc.r, sim_opp.loc.c
+                
+                for dir2 in Direction.cardinals():
+                    actions2 = self._build_actions(sim_board_1, player_parity, dir2, sim_my_r, sim_my_c, sim_stamina)
+                    if actions2 is None:
+                        continue
+                        
+                    ddr2, ddc2 = INV_DIR[dir2]
+                    nr2, nc2 = sim_my_r + ddr2, sim_my_c + ddc2
+                    d_opp2 = mdist(nr2, nc2, sim_opp_r, sim_opp_c)
+                    
+                    if sim_board_1.cells[nr2][nc2].owner_parity == self.opp and d_opp2 <= SAFE_DIST:
+                        continue
+                    if d_opp2 == 0:
+                        continue
+                        
+                    try:
+                        sim_board_2, ok_2 = sim_board_1.forecast_turn(player_parity, actions2)
+                        if ok_2:
+                            score = self._eval_board(sim_board_2, player_parity)
+                            if score > max_ply2_eval:
+                                max_ply2_eval = score
+                    except Exception:
+                        pass
+                
+                if max_ply2_eval == -999999:
+                    max_ply2_eval = self._eval_board(sim_board_1, player_parity)
+                    
+                if max_ply2_eval > best_eval:
+                    best_eval = max_ply2_eval
+                    best_actions = actions
             except Exception:
                 pass
 
