@@ -72,7 +72,7 @@ class PlayerController:
 
         # --- Erase step for contested hills ---
         # If adjacent to opponent-painted uncaptured hill cell, erase it
-        if stamina >= 55:  # 40 erase + 15 paint buffer
+        if stamina >= 65:  # 40 erase + 10 move + 15 paint
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
@@ -81,9 +81,43 @@ class PlayerController:
                 if (ecell.hill_id and ecell.hill_id != 0 and
                     ecell.owner_parity == self.opp and
                     board.hills[ecell.hill_id].controller_parity != player_parity):
-                    # Don't erase into opponent (collision rules unclear for erase)
-                    if nr != opp_r or nc != opp_c:
-                        return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
+                    if nr == opp_r and nc == opp_c:
+                        continue
+                    erase_dir = DIR_MAP[(dr, dc)]
+                    # Find exit cell to paint the erased cell from
+                    for dr2, dc2 in DR:
+                        ar, ac = nr + dr2, nc + dc2
+                        if not valid(ar, ac) or (ar == opp_r and ac == opp_c):
+                            continue
+                        if cell_owner(ar, ac) == self.opp and mdist(ar, ac, opp_r, opp_c) <= SAFE_DIST:
+                            continue
+                        exit_dir = DIR_MAP[(dr2, dc2)]
+                        actions = [
+                            Action.Move(erase_dir, move_type=MoveType.ERASE),
+                            Action.Move(exit_dir),
+                            Action.Paint(Location(nr, nc)),
+                        ]
+                        # Paint more cells from exit position if budget allows
+                        remaining = stamina - 65 - 10  # reserve
+                        for dr3, dc3 in DR:
+                            pr, pc = ar + dr3, ac + dc3
+                            if (pr, pc) == (nr, nc):
+                                continue
+                            if not (0 <= pr < rows and 0 <= pc < cols):
+                                continue
+                            pcell = board.cells[pr][pc]
+                            if pcell.is_wall or pcell.beacon_parity == player_parity:
+                                continue
+                            if pcell.owner_parity != player_parity and pcell.owner_parity != 0:
+                                continue
+                            if pcell.owner_parity == player_parity and abs(pcell.paint_value) >= GameConstants.MAX_PAINT_VALUE:
+                                continue
+                            if remaining >= GameConstants.PAINT_STAMINA_COST:
+                                actions.append(Action.Paint(Location(pr, pc)))
+                                remaining -= GameConstants.PAINT_STAMINA_COST
+                        return actions
+                    # No safe exit cell - just erase
+                    return [Action.Move(erase_dir, move_type=MoveType.ERASE)]
 
         # --- BFS ---
         best_first_dir = None
