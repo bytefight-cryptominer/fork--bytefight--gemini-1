@@ -70,6 +70,16 @@ class PlayerController:
                     count += 1
             return count
 
+        # --- Pursuit: chase weak opponent for collision kill ---
+        if opp_stamina < 20 and stamina > 40:
+            d_to_opp = mdist(my_r, my_c, opp_r, opp_c)
+            if 1 < d_to_opp <= 2 and cell_owner(opp_r, opp_c) != self.opp:
+                # Opponent is weak and on non-enemy cell - chase them
+                for dr, dc in DR:
+                    nr, nc = my_r + dr, my_c + dc
+                    if valid(nr, nc) and mdist(nr, nc, opp_r, opp_c) < d_to_opp:
+                        return [Action.Move(DIR_MAP[(dr, dc)])]
+
         # --- Erase step for hill cells with opponent paint ---
         # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
         if stamina >= 55:  # 40 erase + 15 paint buffer
@@ -169,19 +179,31 @@ class PlayerController:
             if best_first_dir is None:
                 return Action.Move(Direction.UP)
 
-        actions: List = []
-        actions.append(Action.Move(best_first_dir))
-
         ddr, ddc = INV_DIR[best_first_dir]
         new_r, new_c = my_r + ddr, my_c + ddc
 
         if not valid(new_r, new_c):
-            return actions
+            return [Action.Move(best_first_dir)]
+
+        actions: List = []
 
         # Late game conservation
         reserve = 25 if board.turn_count > 1400 else 10
         paint_budget = stamina - reserve
         paint_spent = 0
+
+        # Pre-paint: paint neutral HILL cells ahead before moving
+        # This claims them 1 turn earlier for hill capture advantage
+        target_cell = board.cells[new_r][new_c]
+        if (target_cell.owner_parity == 0 and
+            target_cell.hill_id and target_cell.hill_id != 0 and
+            not target_cell.is_wall and
+            target_cell.beacon_parity != player_parity and
+            paint_spent + GameConstants.PAINT_STAMINA_COST <= paint_budget):
+            actions.append(Action.Paint(Location(new_r, new_c)))
+            paint_spent += GameConstants.PAINT_STAMINA_COST
+
+        actions.append(Action.Move(best_first_dir))
 
         paint_candidates = []
         for dr, dc in DR:
