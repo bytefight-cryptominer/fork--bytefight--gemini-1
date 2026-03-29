@@ -119,12 +119,6 @@ class PlayerController:
                 if d_opp > SAFE_DIST:
                     priority = 300 - depth * 15
 
-            # Voronoi: deprioritize cells opponent will reach first
-            if priority > -900:
-                opp_d = mdist(r, c, opp_r, opp_c)
-                if depth > opp_d + 2:
-                    priority -= 200  # opponent reaches this first
-
             # Tiebreak: prefer directions with more paintable neighbors
             if priority > -900:
                 priority += count_paintable(r, c) * 2
@@ -159,53 +153,87 @@ class PlayerController:
         # Build action list
         actions: List = []
 
-        # 1. Move
-        actions.append(Action.Move(best_first_dir))
-
         # Calculate new position
         ddr, ddc = INV_DIR[best_first_dir]
         new_r, new_c = my_r + ddr, my_c + ddc
 
         if not valid(new_r, new_c):
-            return actions
+            return [Action.Move(best_first_dir)]
 
-        # 2. Paint after moving
-        # Budget: keep at least 10 stamina reserve (for regen to cover next turn)
+        # Budget: keep at least 10 stamina reserve
         reserve = 10
         paint_budget = stamina - reserve
         paint_spent = 0
+        painted_cells = set()
 
-        paint_candidates = []
+        def can_paint(pr, pc):
+            if not (0 <= pr < rows and 0 <= pc < cols):
+                return False
+            pcell = board.cells[pr][pc]
+            if pcell.is_wall or pcell.beacon_parity == player_parity:
+                return False
+            if pcell.owner_parity != player_parity and pcell.owner_parity != 0:
+                return False
+            if pcell.owner_parity == player_parity and abs(pcell.paint_value) >= GameConstants.MAX_PAINT_VALUE:
+                return False
+            return True
+
+        # 1. Pre-paint from current position (cells not reachable from new position)
+        pre_candidates = []
+        new_neighbors = set()
+        for dr, dc in DR:
+            new_neighbors.add((new_r + dr, new_c + dc))
+        for dr, dc in DR:
+            pr, pc = my_r + dr, my_c + dc
+            if (pr, pc) in new_neighbors or (pr, pc) == (new_r, new_c):
+                continue  # Skip cells reachable from new position (paint later)
+            if not can_paint(pr, pc):
+                continue
+            pscore = 0
+            pcell = board.cells[pr][pc]
+            if pcell.hill_id and pcell.hill_id != 0:
+                pscore += 200
+            if pcell.owner_parity == 0:
+                pscore += 100
+            else:
+                pscore += 10
+            pre_candidates.append((pscore, pr, pc))
+
+        pre_candidates.sort(key=lambda x: -x[0])
+        for _, pr, pc in pre_candidates:
+            if paint_spent + GameConstants.PAINT_STAMINA_COST > paint_budget:
+                break
+            actions.append(Action.Paint(Location(pr, pc)))
+            paint_spent += GameConstants.PAINT_STAMINA_COST
+            painted_cells.add((pr, pc))
+
+        # 2. Move
+        actions.append(Action.Move(best_first_dir))
+
+        # 3. Paint after moving
+        post_candidates = []
         for dr, dc in DR:
             pr, pc = new_r + dr, new_c + dc
-            if not (0 <= pr < rows and 0 <= pc < cols):
+            if (pr, pc) in painted_cells:
                 continue
-            pcell = board.cells[pr][pc]
-            if pcell.is_wall:
-                continue
-            if pcell.beacon_parity == player_parity:
-                continue
-            if pcell.owner_parity != player_parity and pcell.owner_parity != 0:
-                continue
-            if pcell.owner_parity == player_parity and abs(pcell.paint_value) >= GameConstants.MAX_PAINT_VALUE:
+            if not can_paint(pr, pc):
                 continue
 
             pscore = 0
-            # Priority: hill cells > cell we just left (paint behind) > neutral > reinforce
+            pcell = board.cells[pr][pc]
             if pcell.hill_id and pcell.hill_id != 0:
                 pscore += 200
             if pr == my_r and pc == my_c:
-                pscore += 150  # paint behind us (cell we just left)
+                pscore += 150  # paint behind us
             if pcell.owner_parity == 0:
                 pscore += 100
             else:
                 pscore += 10
 
-            paint_candidates.append((pscore, pr, pc))
+            post_candidates.append((pscore, pr, pc))
 
-        paint_candidates.sort(key=lambda x: -x[0])
-
-        for _, pr, pc in paint_candidates:
+        post_candidates.sort(key=lambda x: -x[0])
+        for _, pr, pc in post_candidates:
             if paint_spent + GameConstants.PAINT_STAMINA_COST > paint_budget:
                 break
             actions.append(Action.Paint(Location(pr, pc)))
