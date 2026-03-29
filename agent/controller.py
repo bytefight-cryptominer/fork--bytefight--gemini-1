@@ -87,7 +87,6 @@ class PlayerController:
         # --- BFS ---
         best_first_dir = None
         best_priority = -999999
-        dir_total = {}  # aggregate scores per direction
 
         visited = set()
         visited.add((my_r, my_c))
@@ -145,10 +144,6 @@ class PlayerController:
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
-                # Aggregate direction scoring
-                if first_dir not in dir_total:
-                    dir_total[first_dir] = 0
-                dir_total[first_dir] += max(0, priority)
 
             if priority > best_priority:
                 best_priority = priority
@@ -164,10 +159,6 @@ class PlayerController:
                         continue
                     visited.add((nr, nc))
                     queue.append((nr, nc, first_dir, depth + 1))
-
-        # Use aggregate direction score if available, falling back to best single cell
-        if dir_total:
-            best_first_dir = max(dir_total, key=lambda d: dir_total[d])
 
         if best_first_dir is None:
             for dr, dc in DR:
