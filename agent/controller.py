@@ -218,4 +218,4 @@ class PlayerController:
         return actions
 
     def commentate(self, board: Board, player_parity: int, time_left: Callable) -> str:
-        return ""
+        return "v12"
