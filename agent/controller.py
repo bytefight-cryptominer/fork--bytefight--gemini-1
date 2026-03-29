@@ -17,7 +17,7 @@ class PlayerController:
         self.opp = -player_parity
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
-        return 0
+        return 1
 
     def play(
         self,
