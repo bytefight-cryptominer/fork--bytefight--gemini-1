@@ -75,10 +75,12 @@ class PlayerController:
         me = board.get_player(player_parity)
         rows, cols = board.board_size.r, board.board_size.c
         territory = 0
+        paint_strength = 0
         for row in board.cells:
             for cell in row:
                 if cell.owner_parity == player_parity:
                     territory += 1
+                    paint_strength += abs(cell.paint_value)
         hills = len(me.controlled_hills) * 200
         local = 0
         for dr in range(-2, 3):
@@ -87,7 +89,7 @@ class PlayerController:
                 if 0 <= nr < rows and 0 <= nc < cols:
                     if board.cells[nr][nc].owner_parity == player_parity:
                         local += 2
-        return territory + hills + local + me.stamina * 0.1
+        return territory + paint_strength * 0.1 + hills + local + me.stamina * 0.1
 
     def play(
         self,
