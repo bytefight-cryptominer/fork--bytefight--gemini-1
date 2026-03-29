@@ -70,6 +70,21 @@ class PlayerController:
                     count += 1
             return count
 
+        # --- Erase step for contested hills ---
+        # If adjacent to opponent-painted uncaptured hill cell, erase it
+        if stamina >= 55:  # 40 erase + 15 paint buffer
+            for dr, dc in DR:
+                nr, nc = my_r + dr, my_c + dc
+                if not valid(nr, nc):
+                    continue
+                ecell = board.cells[nr][nc]
+                if (ecell.hill_id and ecell.hill_id != 0 and
+                    ecell.owner_parity == self.opp and
+                    board.hills[ecell.hill_id].controller_parity != player_parity):
+                    # Don't erase into opponent (collision rules unclear for erase)
+                    if nr != opp_r or nc != opp_c:
+                        return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
+
         # --- BFS ---
         best_first_dir = None
         best_priority = -999999
@@ -169,18 +184,6 @@ class PlayerController:
         paint_budget = stamina - reserve
         paint_spent = 0
 
-        # Check if adjacent to uncaptured hill - if so, focus paint on hill cells
-        near_uncaptured_hill = False
-        for dr, dc in DR:
-            pr, pc = new_r + dr, new_c + dc
-            if 0 <= pr < rows and 0 <= pc < cols:
-                pcell = board.cells[pr][pc]
-                if pcell.hill_id and pcell.hill_id != 0:
-                    hill = board.hills[pcell.hill_id]
-                    if hill.controller_parity != player_parity:
-                        near_uncaptured_hill = True
-                        break
-
         paint_candidates = []
         for dr, dc in DR:
             pr, pc = new_r + dr, new_c + dc
@@ -192,12 +195,6 @@ class PlayerController:
             if pcell.owner_parity != player_parity and pcell.owner_parity != 0:
                 continue
             if pcell.owner_parity == player_parity and abs(pcell.paint_value) >= GameConstants.MAX_PAINT_VALUE:
-                continue
-
-            # When near uncaptured hill, only paint hill cells (save stamina)
-            is_uncaptured_hill_cell = (pcell.hill_id and pcell.hill_id != 0 and
-                                       board.hills[pcell.hill_id].controller_parity != player_parity)
-            if near_uncaptured_hill and not is_uncaptured_hill_cell:
                 continue
 
             pscore = 0
@@ -221,4 +218,4 @@ class PlayerController:
         return actions
 
     def commentate(self, board: Board, player_parity: int, time_left: Callable) -> str:
-        return " "
+        return ""
