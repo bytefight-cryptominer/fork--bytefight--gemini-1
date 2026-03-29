@@ -112,7 +112,7 @@ class PlayerController:
 
         while queue:
             r, c, first_dir, depth = queue.popleft()
-            if depth > 20:
+            if depth > 25:
                 break
 
             cell = board.cells[r][c]
@@ -149,7 +149,7 @@ class PlayerController:
                 best_priority = priority
                 best_first_dir = first_dir
 
-            if depth < 20:
+            if depth < 25:
                 for dr, dc in DR:
                     nr, nc = r + dr, c + dc
                     if (nr, nc) in visited or not valid(nr, nc):
@@ -178,8 +178,8 @@ class PlayerController:
         if not valid(new_r, new_c):
             return actions
 
-        # Paint budget
-        reserve = 20 if board.turn_count > 1400 else 5
+        # Late game conservation
+        reserve = 25 if board.turn_count > 1400 else 10
         paint_budget = stamina - reserve
         paint_spent = 0
 
