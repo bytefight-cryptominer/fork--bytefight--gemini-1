@@ -7,14 +7,16 @@ from game import *
 
 class PlayerController:
     """
-    v10: Comprehensive territory-control agent.
-    Combines: adaptive safety, collision pursuit, powerup collection,
-    late-game conservation.
+    v36: Momentum-based movement with strategic overrides.
+    Continues in the same direction unless a high-priority target
+    (hill, powerup) overrides. Creates denser territory patterns.
+    Built on v23 (BFS depth 20 + erase-step).
     """
 
     def __init__(self, player_parity: int, time_left: Callable):
         self.parity = player_parity
         self.opp = -player_parity
+        self.last_dir = None
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
         return 0
@@ -71,8 +73,7 @@ class PlayerController:
             return count
 
         # --- Erase step for hill cells with opponent paint ---
-        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
-        if stamina >= 55:  # 40 erase + 15 paint buffer
+        if stamina >= 55:
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
@@ -82,6 +83,7 @@ class PlayerController:
                     ecell.owner_parity == self.opp):
                     if nr == opp_r and nc == opp_c:
                         continue
+                    self.last_dir = DIR_MAP[(dr, dc)]
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
         # --- BFS ---
@@ -102,6 +104,7 @@ class PlayerController:
             if nr == opp_r and nc == opp_c:
                 if cell_owner(nr, nc) == self.opp:
                     continue
+                self.last_dir = DIR_MAP[(dr, dc)]
                 return Action.Move(DIR_MAP[(dr, dc)])
 
             if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
@@ -160,6 +163,17 @@ class PlayerController:
                     visited.add((nr, nc))
                     queue.append((nr, nc, first_dir, depth + 1))
 
+        # --- Momentum: prefer continuing in the same direction ---
+        # Only override if BFS target is low-priority (not a hill/powerup)
+        if self.last_dir is not None and best_priority < 1500:
+            ldr, ldc = INV_DIR[self.last_dir]
+            lr, lc = my_r + ldr, my_c + ldc
+            if (valid(lr, lc) and
+                not (cell_owner(lr, lc) == self.opp and mdist(lr, lc, opp_r, opp_c) <= SAFE_DIST) and
+                mdist(lr, lc, opp_r, opp_c) > 0):
+                best_first_dir = self.last_dir
+
+        # Fallback
         if best_first_dir is None:
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
@@ -167,7 +181,10 @@ class PlayerController:
                     best_first_dir = DIR_MAP[(dr, dc)]
                     break
             if best_first_dir is None:
+                self.last_dir = Direction.UP
                 return Action.Move(Direction.UP)
+
+        self.last_dir = best_first_dir
 
         actions: List = []
         actions.append(Action.Move(best_first_dir))
