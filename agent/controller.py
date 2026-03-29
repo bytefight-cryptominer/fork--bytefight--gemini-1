@@ -51,11 +51,11 @@ class PlayerController:
         # Adaptive safety based on stamina advantage
         stamina_diff = stamina - opp_stamina
         if stamina_diff > 30:
-            SAFE_DIST = 3
+            SAFE_DIST = 2
         elif stamina_diff < -30:
-            SAFE_DIST = 6
-        else:
             SAFE_DIST = 5
+        else:
+            SAFE_DIST = 4
 
         def count_paintable(r, c):
             count = 0
@@ -122,11 +122,11 @@ class PlayerController:
                 hill = board.hills[cell.hill_id]
                 if hill.controller_parity != player_parity:
                     if cell.owner_parity != player_parity:
-                        priority = 3000 - depth * 20  # EXTREME hill aggression
+                        priority = 2000 - depth * 20
                     else:
-                        priority = 1500 - depth * 20
+                        priority = 1000 - depth * 20
                 elif cell.owner_parity == 0:
-                    priority = 1000 - depth * 15
+                    priority = 800 - depth * 15
 
             if cell.powerup:
                 pup_val = 1500 - depth * 25
@@ -135,12 +135,12 @@ class PlayerController:
                 priority = max(priority, pup_val)
 
             if cell.owner_parity == 0 and priority < -900:
-                priority = 700 - depth * 20  # Lower neutral priority
+                priority = 900 - depth * 20
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 400 - depth * 15  # Slightly higher for territory contest
+                    priority = 300 - depth * 15
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
