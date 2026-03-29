@@ -7,13 +7,12 @@ from game import *
 
 class PlayerController:
     """
-    BFS expansion agent v3: aggressive expansion with paint-behind strategy.
+    gemini-1-v5: BFS expansion with Strategic Bidding & Refined Hill Defense.
 
-    Key improvements over v2:
-    - Paint cell we just left (behind us) for efficient territory filling
-    - More aggressive paint budget (reserve only 10 stamina)
-    - Better hill targeting with weighted BFS
-    - Smarter direction tiebreaking (prefer directions with more paintable neighbors)
+    Improvements over v4:
+    - Strategic Bidding: bid 1 stamina to gain initiative when near hills or powerups.
+    - Refined Hill Scoring: even higher priority for contesting hill cells.
+    - Better stamina thresholding for powerups and bidding.
     """
 
     def __init__(self, player_parity: int, time_left: Callable):
@@ -21,6 +20,17 @@ class PlayerController:
         self.opp = -player_parity
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
+        me = board.get_player(player_parity)
+        if me.stamina < 20: return 0
+        
+        # Bid 1 if near critical targets
+        for dr in range(-2, 3):
+            for dc in range(-2, 3):
+                nr, nc = me.loc.r + dr, me.loc.c + dc
+                if 0 <= nr < board.board_size.r and 0 <= nc < board.board_size.c:
+                    cell = board.cells[nr][nc]
+                    if (cell.hill_id and cell.hill_id != 0) or cell.powerup:
+                        return 1
         return 0
 
     def play(
@@ -52,105 +62,104 @@ class PlayerController:
         def cell_owner(r, c):
             return board.cells[r][c].owner_parity
 
-        # Count paintable neighbors from a position (for direction tiebreaking)
         def count_paintable(r, c):
             count = 0
             for dr, dc in DR:
                 nr, nc = r + dr, c + dc
-                if not valid(nr, nc):
-                    continue
+                if not valid(nr, nc): continue
                 o = cell_owner(nr, nc)
-                if o == 0:
-                    count += 2  # neutral is best
+                if o == 0: count += 2
                 elif o == player_parity and abs(board.cells[nr][nc].paint_value) < GameConstants.MAX_PAINT_VALUE:
-                    count += 1  # can reinforce
+                    count += 1
             return count
 
-        # BFS to find best direction
+        # BFS for best targets
         best_first_dir = None
         best_priority = -999999
+        best_depth = 99
 
         visited = set()
         visited.add((my_r, my_c))
         queue = deque()
 
-        # Seed with immediate neighbors
-        candidates = []
         for dr, dc in DR:
             nr, nc = my_r + dr, my_c + dc
-            if not valid(nr, nc):
-                continue
+            if not valid(nr, nc): continue
             d_opp = mdist(nr, nc, opp_r, opp_c)
-            # Hard safety: don't step on enemy cell near opponent
-            if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
-                continue
-            # Don't walk into opponent
-            if d_opp == 0:
-                continue
+            if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST: continue
+            if d_opp == 0: continue
+            
             d_enum = DIR_MAP[(dr, dc)]
             visited.add((nr, nc))
             queue.append((nr, nc, d_enum, 1))
-            candidates.append((nr, nc, d_enum))
 
         while queue:
             r, c, first_dir, depth = queue.popleft()
-            if depth > 15:
-                break
+            if depth > 15: break
 
             cell = board.cells[r][c]
             priority = -999999
 
-            # Score this cell as a target
+            # 1. Hill Cells
             if cell.hill_id and cell.hill_id != 0:
                 hill = board.hills[cell.hill_id]
                 if hill.controller_parity != player_parity:
-                    if cell.owner_parity != player_parity:
-                        priority = 2000 - depth * 20  # uncaptured hill, unpainted
+                    if cell.owner_parity == self.opp:
+                        priority = 3000 - depth * 20
+                    elif cell.owner_parity == 0:
+                        priority = 2500 - depth * 20
                     else:
-                        priority = 1000 - depth * 20  # uncaptured hill, already painted
-                elif cell.owner_parity == 0:
-                    priority = 800 - depth * 15  # captured hill, neutral cell (reinforce)
+                        priority = 1000 - depth * 20
+                else:
+                    # Defend hill
+                    if cell.owner_parity == self.opp:
+                        priority = 2200 - depth * 20
+                    elif cell.owner_parity == 0:
+                        priority = 1200 - depth * 20
+                    elif abs(cell.paint_value) < GameConstants.MAX_PAINT_VALUE:
+                        priority = 600 - depth * 15
 
+            # 2. Powerups
+            if cell.powerup and stamina < 75:
+                p_val = 1800 - depth * 30
+                if p_val > priority: priority = p_val
+
+            # 3. Neutral Expansion
             if cell.owner_parity == 0 and priority < -900:
-                priority = 900 - depth * 20  # neutral expansion
+                priority = 900 - depth * 20
 
+            # 4. Take opponent territory
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - depth * 15
+                    priority = 400 - depth * 15
 
-            # Tiebreak: prefer directions with more paintable neighbors
             if priority > -900:
                 priority += count_paintable(r, c) * 2
 
-            if priority > best_priority:
+            if priority > best_priority or (priority == best_priority and depth < best_depth):
                 best_priority = priority
                 best_first_dir = first_dir
+                best_depth = depth
 
             if depth < 15:
                 for dr, dc in DR:
                     nr, nc = r + dr, c + dc
-                    if (nr, nc) in visited:
-                        continue
-                    if not valid(nr, nc):
-                        continue
+                    if (nr, nc) in visited: continue
+                    if not valid(nr, nc): continue
                     d_opp = mdist(nr, nc, opp_r, opp_c)
-                    if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
-                        continue
+                    if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST: continue
                     visited.add((nr, nc))
                     queue.append((nr, nc, first_dir, depth + 1))
 
-        # Fallback
         if best_first_dir is None:
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if valid(nr, nc):
                     best_first_dir = DIR_MAP[(dr, dc)]
                     break
-            if best_first_dir is None:
-                return Action.Move(Direction.UP)
+            if best_first_dir is None: return Action.Move(Direction.UP)
 
-        # Build action list
         actions: List = []
         ddr, ddc = INV_DIR[best_first_dir]
         new_r, new_c = my_r + ddr, my_c + ddc
@@ -158,72 +167,64 @@ class PlayerController:
         if not valid(new_r, new_c):
             return [Action.Move(best_first_dir)]
 
-        # Check for double-move opportunity: 2nd cell in same direction
-        stop2_r, stop2_c = new_r + ddr, new_c + ddc
-        # Double move when: high stamina, 2nd cell valid, 2nd cell not enemy near opp
-        use_double = False
-        if stamina >= 70 and valid(stop2_r, stop2_c):
-            d_opp2 = mdist(stop2_r, stop2_c, opp_r, opp_c)
-            if not (cell_owner(stop2_r, stop2_c) == self.opp and d_opp2 <= SAFE_DIST):
-                if d_opp2 > 0:  # don't collide
-                    use_double = True
-
         reserve = 10
-        # Account for extra move cost in budget
-        extra_move_cost = 10 if use_double else 0
-        paint_budget = stamina - reserve - extra_move_cost
+        paint_budget = stamina - reserve
         paint_spent = 0
         painted_cells = set()
 
-        def collect_paint_candidates(cr, cc, old_r, old_c):
-            """Collect paintable cells adjacent to (cr, cc)."""
-            cands = []
-            for dr, dc in DR:
-                pr, pc = cr + dr, cc + dc
-                if (pr, pc) in painted_cells:
-                    continue
-                if not (0 <= pr < rows and 0 <= pc < cols):
-                    continue
-                pcell = board.cells[pr][pc]
-                if pcell.is_wall or pcell.beacon_parity == player_parity:
-                    continue
-                if pcell.owner_parity != player_parity and pcell.owner_parity != 0:
-                    continue
-                if pcell.owner_parity == player_parity and abs(pcell.paint_value) >= GameConstants.MAX_PAINT_VALUE:
-                    continue
-                pscore = 0
-                if pcell.hill_id and pcell.hill_id != 0:
-                    pscore += 200
-                if pr == old_r and pc == old_c:
-                    pscore += 150
-                if pcell.owner_parity == 0:
-                    pscore += 100
-                else:
-                    pscore += 10
-                cands.append((pscore, pr, pc))
-            cands.sort(key=lambda x: -x[0])
-            return cands
+        def can_paint(pr, pc):
+            if not (0 <= pr < rows and 0 <= pc < cols): return False
+            pcell = board.cells[pr][pc]
+            if pcell.is_wall or pcell.beacon_parity == player_parity: return False
+            if pcell.owner_parity != player_parity and pcell.owner_parity != 0: return False
+            if pcell.owner_parity == player_parity and abs(pcell.paint_value) >= GameConstants.MAX_PAINT_VALUE:
+                return False
+            return True
 
-        # 1. First move
-        actions.append(Action.Move(best_first_dir))
+        # 1. Pre-paint
+        pre_candidates = []
+        new_neighbors = set()
+        for dr, dc in DR: new_neighbors.add((new_r + dr, new_c + dc))
+        for dr, dc in DR:
+            pr, pc = my_r + dr, my_c + dc
+            if (pr, pc) in new_neighbors or (pr, pc) == (new_r, new_c): continue
+            if not can_paint(pr, pc): continue
+            pscore = 0
+            pcell = board.cells[pr][pc]
+            if pcell.hill_id and pcell.hill_id != 0: pscore += 200
+            if pcell.owner_parity == 0: pscore += 100
+            else: pscore += 10
+            pre_candidates.append((pscore, pr, pc))
 
-        # 2. Paint at first stop
-        for _, pr, pc in collect_paint_candidates(new_r, new_c, my_r, my_c):
-            if paint_spent + GameConstants.PAINT_STAMINA_COST > paint_budget:
-                break
+        pre_candidates.sort(key=lambda x: -x[0])
+        for _, pr, pc in pre_candidates:
+            if paint_spent + GameConstants.PAINT_STAMINA_COST > paint_budget: break
             actions.append(Action.Paint(Location(pr, pc)))
             paint_spent += GameConstants.PAINT_STAMINA_COST
             painted_cells.add((pr, pc))
 
-        # 3. Optional second move + paint
-        if use_double:
-            actions.append(Action.Move(best_first_dir))
-            for _, pr, pc in collect_paint_candidates(stop2_r, stop2_c, new_r, new_c):
-                if paint_spent + GameConstants.PAINT_STAMINA_COST > paint_budget:
-                    break
-                actions.append(Action.Paint(Location(pr, pc)))
-                paint_spent += GameConstants.PAINT_STAMINA_COST
-                painted_cells.add((pr, pc))
+        # 2. Move
+        actions.append(Action.Move(best_first_dir))
+
+        # 3. Post-paint
+        post_candidates = []
+        for dr, dc in DR:
+            pr, pc = new_r + dr, new_c + dc
+            if (pr, pc) in painted_cells: continue
+            if not can_paint(pr, pc): continue
+            pscore = 0
+            pcell = board.cells[pr][pc]
+            if pcell.hill_id and pcell.hill_id != 0: pscore += 200
+            if pr == my_r and pc == my_c: pscore += 150
+            if pcell.owner_parity == 0: pscore += 100
+            else: pscore += 10
+            post_candidates.append((pscore, pr, pc))
+
+        post_candidates.sort(key=lambda x: -x[0])
+        for _, pr, pc in post_candidates:
+            if paint_spent + GameConstants.PAINT_STAMINA_COST > paint_budget: break
+            actions.append(Action.Paint(Location(pr, pc)))
+            paint_spent += GameConstants.PAINT_STAMINA_COST
 
         return actions
 
