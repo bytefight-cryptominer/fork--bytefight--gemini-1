@@ -215,7 +215,7 @@ class PlayerController:
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - depth * 15
+                    priority = 1100 - depth * 20
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
