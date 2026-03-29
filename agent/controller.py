@@ -51,11 +51,11 @@ class PlayerController:
         # Adaptive safety based on stamina advantage
         stamina_diff = stamina - opp_stamina
         if stamina_diff > 30:
-            SAFE_DIST = 2
+            SAFE_DIST = 3
         elif stamina_diff < -30:
-            SAFE_DIST = 5
+            SAFE_DIST = 6
         else:
-            SAFE_DIST = 4
+            SAFE_DIST = 5
 
         def count_paintable(r, c):
             count = 0
