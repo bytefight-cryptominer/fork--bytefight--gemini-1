@@ -136,6 +136,15 @@ class PlayerController:
 
             if cell.owner_parity == 0 and priority < -900:
                 priority = 900 - depth * 20
+                # Boost cells adjacent to uncaptured hills (approach paths)
+                for dr2, dc2 in DR:
+                    ar, ac = r + dr2, c + dc2
+                    if 0 <= ar < rows and 0 <= ac < cols:
+                        acell = board.cells[ar][ac]
+                        if acell.hill_id and acell.hill_id != 0:
+                            if board.hills[acell.hill_id].controller_parity != player_parity:
+                                priority += 150
+                                break
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
