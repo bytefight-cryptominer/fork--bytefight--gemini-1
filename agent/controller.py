@@ -200,22 +200,21 @@ class PlayerController:
                     visited.add((nr, nc))
                     queue.append((nr, nc, first_dir, depth + 1))
 
-        # --- Combined BFS + Forecast direction selection ---
-        # Collect BFS scores per direction
-        dir_bfs = {}  # direction -> best BFS priority
-        # Re-run BFS scoring for each seeded direction
-        # (already computed above, but we need per-direction scores)
-        # Use bfs_dir and bfs_priority as a baseline
-        # For simplicity, use the BFS to get the overall best, then use
-        # forecast to evaluate all 4 safe directions
+        # --- Forecast-based direction selection ---
+        # If BFS found a high-priority target (hill/powerup), use BFS direction
+        if bfs_priority >= 1000 and bfs_dir is not None:
+            actions = self._build_actions(board, player_parity, bfs_dir, my_r, my_c, stamina)
+            if actions:
+                return actions
 
+        # Otherwise, simulate all 4 directions and pick best outcome
         best_actions = None
-        best_combined = -999999
-
+        best_eval = -999999
         for direction in Direction.cardinals():
             actions = self._build_actions(board, player_parity, direction, my_r, my_c, stamina)
             if actions is None:
                 continue
+            # Check safety
             ddr, ddc = INV_DIR[direction]
             nr, nc = my_r + ddr, my_c + ddc
             d_opp = mdist(nr, nc, opp_r, opp_c)
@@ -223,32 +222,21 @@ class PlayerController:
                 continue
             if d_opp == 0:
                 continue
-
-            # BFS bonus: high if this is the BFS-recommended direction
-            bfs_bonus = 0
-            if direction == bfs_dir:
-                bfs_bonus = max(0, bfs_priority)
-
-            # Forecast evaluation
-            forecast_score = 0
+            # Simulate
             try:
                 sim_board, ok = board.forecast_turn(player_parity, actions)
                 if ok:
-                    forecast_score = self._eval_board(sim_board, player_parity)
+                    score = self._eval_board(sim_board, player_parity)
+                    if score > best_eval:
+                        best_eval = score
+                        best_actions = actions
             except Exception:
                 pass
-
-            # Combined: BFS for long-range + forecast for immediate
-            combined = bfs_bonus * 0.3 + forecast_score
-
-            if combined > best_combined:
-                best_combined = combined
-                best_actions = actions
 
         if best_actions:
             return best_actions
 
-        # Fallback
+        # Fallback to BFS direction or any valid move
         if bfs_dir is not None:
             actions = self._build_actions(board, player_parity, bfs_dir, my_r, my_c, stamina)
             if actions:
@@ -261,4 +249,4 @@ class PlayerController:
         return [Action.Move(Direction.UP)]
 
     def commentate(self, board: Board, player_parity: int, time_left: Callable) -> str:
-        return "v45b"
+        return ""
