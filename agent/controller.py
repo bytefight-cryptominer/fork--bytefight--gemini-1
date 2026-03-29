@@ -17,7 +17,7 @@ class PlayerController:
         self.opp = -player_parity
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
-        return 0
+        return 1
 
     def play(
         self,
@@ -121,17 +121,12 @@ class PlayerController:
             if cell.hill_id and cell.hill_id != 0:
                 hill = board.hills[cell.hill_id]
                 if hill.controller_parity != player_parity:
-                    # Attack: capture uncaptured hill
                     if cell.owner_parity != player_parity:
                         priority = 2000 - depth * 20
                     else:
                         priority = 1000 - depth * 20
-                else:
-                    # Defend: our hill
-                    if cell.owner_parity == self.opp:
-                        priority = 2200 - depth * 20  # Rush to defend!
-                    elif cell.owner_parity == 0:
-                        priority = 800 - depth * 15
+                elif cell.owner_parity == 0:
+                    priority = 800 - depth * 15
 
             if cell.powerup:
                 pup_val = 1500 - depth * 25
