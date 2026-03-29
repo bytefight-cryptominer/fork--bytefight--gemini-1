@@ -155,6 +155,16 @@ class PlayerController:
                     ecell.owner_parity == self.opp):
                     if nr == opp_r and nc == opp_c:
                         continue
+                    if stamina >= 65:
+                        for dr2, dc2 in DR:
+                            off_r, off_c = nr + dr2, nc + dc2
+                            if valid(off_r, off_c) and cell_owner(off_r, off_c) != self.opp:
+                                if mdist(off_r, off_c, opp_r, opp_c) > SAFE_DIST:
+                                    return [
+                                        Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE),
+                                        Action.Move(DIR_MAP[(dr2, dc2)]),
+                                        Action.Paint(Location(nr, nc))
+                                    ]
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
         # --- Collision pursuit ---
