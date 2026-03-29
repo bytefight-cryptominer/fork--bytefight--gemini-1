@@ -70,9 +70,9 @@ class PlayerController:
                     count += 1
             return count
 
-        # --- Erase step for hill cells with opponent paint ---
-        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
-        if stamina >= 55:  # 40 erase + 15 paint buffer
+        # --- Erase step for opponent-painted cells ---
+        # Priority 1: Hill cells (always erase)
+        if stamina >= 55:
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
@@ -83,6 +83,21 @@ class PlayerController:
                     if nr == opp_r and nc == opp_c:
                         continue
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
+        # Priority 2: Non-hill cells with 3+ layers when stamina is high
+        # (only worth erasing thick paint; thin paint is handled by regular steps)
+        if stamina >= 80:
+            for dr, dc in DR:
+                nr, nc = my_r + dr, my_c + dc
+                if not valid(nr, nc):
+                    continue
+                ecell = board.cells[nr][nc]
+                if (ecell.owner_parity == self.opp and abs(ecell.paint_value) >= 3 and
+                    not (ecell.hill_id and ecell.hill_id != 0)):
+                    if nr == opp_r and nc == opp_c:
+                        continue
+                    d_opp = mdist(nr, nc, opp_r, opp_c)
+                    if d_opp > SAFE_DIST:
+                        return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
         # --- BFS ---
         best_first_dir = None
