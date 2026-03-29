@@ -215,8 +215,8 @@ class PlayerController:
 
             if cell.powerup:
                 pup_val = 1500 - depth * 25
-                if stamina < 60:
-                    pup_val += 300
+                stamina_ratio = max(0, min(1, stamina / 100))
+                pup_val += int(1000 * (1 - stamina_ratio))
                 priority = max(priority, pup_val)
                 
             if cell.owner_parity == 0 and priority < -900:
