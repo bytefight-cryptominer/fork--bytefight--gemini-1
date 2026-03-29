@@ -70,40 +70,19 @@ class PlayerController:
                     count += 1
             return count
 
-        # --- Erase step: hill cells first, then thick opponent cells near hills ---
-        if stamina >= 55:
-            erase_target = None
-            erase_priority = 0
+        # --- Erase step for hill cells with opponent paint ---
+        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
+        if stamina >= 55:  # 40 erase + 15 paint buffer
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
                     continue
-                if nr == opp_r and nc == opp_c:
-                    continue
                 ecell = board.cells[nr][nc]
-                if ecell.owner_parity != self.opp:
-                    continue
-                # Priority 1: opponent hill cells (always erase)
-                if ecell.hill_id and ecell.hill_id != 0:
-                    if erase_priority < 2:
-                        erase_priority = 2
-                        erase_target = (dr, dc)
-                # Priority 2: thick opponent cells (3+ layers) near uncaptured hills
-                elif abs(ecell.paint_value) >= 3 and erase_priority < 1:
-                    d_opp = mdist(nr, nc, opp_r, opp_c)
-                    if d_opp > SAFE_DIST:
-                        # Check if near an uncaptured hill
-                        for hid, hill in board.hills.items():
-                            if hid != 0 and hill.controller_parity != player_parity:
-                                for hloc in hill.cells:
-                                    if mdist(nr, nc, hloc.r, hloc.c) <= 3:
-                                        erase_priority = 1
-                                        erase_target = (dr, dc)
-                                        break
-                                if erase_priority == 1:
-                                    break
-            if erase_target:
-                return [Action.Move(DIR_MAP[erase_target], move_type=MoveType.ERASE)]
+                if (ecell.hill_id and ecell.hill_id != 0 and
+                    ecell.owner_parity == self.opp):
+                    if nr == opp_r and nc == opp_c:
+                        continue
+                    return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
         # --- BFS ---
         best_first_dir = None
@@ -175,9 +154,9 @@ class PlayerController:
                     nr, nc = r + dr, c + dc
                     if (nr, nc) in visited or not valid(nr, nc):
                         continue
-                    d_opp = mdist(nr, nc, opp_r, opp_c)
-                    if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
-                        continue
+                    # Only block opponent cells near opponent at depth 1 (safety)
+                    # At deeper depths, allow traversal for reachability
+                    # (we won't walk there directly; BFS tracks first_dir from safe seeds)
                     visited.add((nr, nc))
                     queue.append((nr, nc, first_dir, depth + 1))
 
