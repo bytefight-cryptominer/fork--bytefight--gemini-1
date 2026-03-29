@@ -178,9 +178,21 @@ class PlayerController:
         if not valid(new_r, new_c):
             return actions
 
-        # Aggressive painting with late game conservation
-        reserve = 20 if board.turn_count > 1400 else 5
-        paint_budget = stamina - reserve
+        # Double-move toward hills when stamina allows
+        use_double = False
+        if best_priority >= 1500 and stamina >= 70:
+            stop2_r, stop2_c = new_r + ddr, new_c + ddc
+            if valid(stop2_r, stop2_c):
+                d_opp2 = mdist(stop2_r, stop2_c, opp_r, opp_c)
+                if d_opp2 > 1 and not (cell_owner(stop2_r, stop2_c) == self.opp and d_opp2 <= SAFE_DIST):
+                    actions.append(Action.Move(best_first_dir))
+                    new_r, new_c = stop2_r, stop2_c
+                    use_double = True
+
+        # Late game conservation
+        extra_move_cost = 10 if use_double else 0
+        reserve = 25 if board.turn_count > 1400 else 10
+        paint_budget = stamina - reserve - extra_move_cost
         paint_spent = 0
 
         paint_candidates = []
