@@ -170,13 +170,33 @@ class PlayerController:
                 return Action.Move(Direction.UP)
 
         actions: List = []
-        actions.append(Action.Move(best_first_dir))
 
         ddr, ddc = INV_DIR[best_first_dir]
         new_r, new_c = my_r + ddr, my_c + ddc
 
         if not valid(new_r, new_c):
-            return actions
+            return [Action.Move(best_first_dir)]
+
+        # Beacon placement: place on captured hill cells when 3x3 is controlled
+        place_beacon = False
+        if me.beacon_count == 0 and board.turn_count > 50:
+            new_cell = board.cells[new_r][new_c]
+            # Only place on hill cells we control (strategic anchor)
+            if (new_cell.hill_id and new_cell.hill_id != 0 and
+                new_cell.owner_parity == player_parity):
+                friendly = 0
+                valid_count = 0
+                for dr2 in range(-1, 2):
+                    for dc2 in range(-1, 2):
+                        br, bc = new_r + dr2, new_c + dc2
+                        if 0 <= br < rows and 0 <= bc < cols and not board.cells[br][bc].is_wall:
+                            valid_count += 1
+                            if board.cells[br][bc].owner_parity == player_parity:
+                                friendly += 1
+                if valid_count > 0 and friendly * 9 >= 6 * valid_count:
+                    place_beacon = True
+
+        actions.append(Action.Move(best_first_dir, place_beacon=place_beacon))
 
         # Late game conservation
         reserve = 25 if board.turn_count > 1400 else 10
