@@ -7,16 +7,14 @@ from game import *
 
 class PlayerController:
     """
-    v36: Momentum-based movement with strategic overrides.
-    Continues in the same direction unless a high-priority target
-    (hill, powerup) overrides. Creates denser territory patterns.
-    Built on v23 (BFS depth 20 + erase-step).
+    v10: Comprehensive territory-control agent.
+    Combines: adaptive safety, collision pursuit, powerup collection,
+    late-game conservation.
     """
 
     def __init__(self, player_parity: int, time_left: Callable):
         self.parity = player_parity
         self.opp = -player_parity
-        self.last_dir = None
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
         return 0
@@ -73,7 +71,8 @@ class PlayerController:
             return count
 
         # --- Erase step for hill cells with opponent paint ---
-        if stamina >= 55:
+        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
+        if stamina >= 55:  # 40 erase + 15 paint buffer
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
@@ -83,7 +82,6 @@ class PlayerController:
                     ecell.owner_parity == self.opp):
                     if nr == opp_r and nc == opp_c:
                         continue
-                    self.last_dir = DIR_MAP[(dr, dc)]
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
         # --- BFS ---
@@ -104,46 +102,48 @@ class PlayerController:
             if nr == opp_r and nc == opp_c:
                 if cell_owner(nr, nc) == self.opp:
                     continue
-                self.last_dir = DIR_MAP[(dr, dc)]
                 return Action.Move(DIR_MAP[(dr, dc)])
 
             if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
                 continue
 
+            # eff_depth penalizes paths through own territory
+            eff = 2 if cell_owner(nr, nc) == player_parity else 1
             visited.add((nr, nc))
-            queue.append((nr, nc, DIR_MAP[(dr, dc)], 1))
+            queue.append((nr, nc, DIR_MAP[(dr, dc)], 1, eff))
 
         while queue:
-            r, c, first_dir, depth = queue.popleft()
+            r, c, first_dir, depth, eff_depth = queue.popleft()
             if depth > 20:
                 break
 
             cell = board.cells[r][c]
             priority = -999999
 
+            # Use eff_depth for scoring (penalizes paths through own territory)
             if cell.hill_id and cell.hill_id != 0:
                 hill = board.hills[cell.hill_id]
                 if hill.controller_parity != player_parity:
                     if cell.owner_parity != player_parity:
-                        priority = 2000 - depth * 20
+                        priority = 2000 - eff_depth * 20
                     else:
-                        priority = 1000 - depth * 20
+                        priority = 1000 - eff_depth * 20
                 elif cell.owner_parity == 0:
-                    priority = 800 - depth * 15
+                    priority = 800 - eff_depth * 15
 
             if cell.powerup:
-                pup_val = 1500 - depth * 25
+                pup_val = 1500 - eff_depth * 25
                 if stamina < 60:
                     pup_val += 300
                 priority = max(priority, pup_val)
 
             if cell.owner_parity == 0 and priority < -900:
-                priority = 900 - depth * 20
+                priority = 900 - eff_depth * 20
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
                 if d_opp > SAFE_DIST:
-                    priority = 300 - depth * 15
+                    priority = 300 - eff_depth * 15
 
             if priority > -900:
                 priority += count_paintable(r, c) * 2
@@ -160,20 +160,11 @@ class PlayerController:
                     d_opp = mdist(nr, nc, opp_r, opp_c)
                     if cell_owner(nr, nc) == self.opp and d_opp <= SAFE_DIST:
                         continue
+                    # Paths through own territory get penalized in scoring
+                    new_eff = eff_depth + (2 if cell_owner(nr, nc) == player_parity else 1)
                     visited.add((nr, nc))
-                    queue.append((nr, nc, first_dir, depth + 1))
+                    queue.append((nr, nc, first_dir, depth + 1, new_eff))
 
-        # --- Momentum: prefer continuing in the same direction ---
-        # Only override if BFS target is low-priority (not a hill/powerup)
-        if self.last_dir is not None and best_priority < 1500:
-            ldr, ldc = INV_DIR[self.last_dir]
-            lr, lc = my_r + ldr, my_c + ldc
-            if (valid(lr, lc) and
-                not (cell_owner(lr, lc) == self.opp and mdist(lr, lc, opp_r, opp_c) <= SAFE_DIST) and
-                mdist(lr, lc, opp_r, opp_c) > 0):
-                best_first_dir = self.last_dir
-
-        # Fallback
         if best_first_dir is None:
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
@@ -181,10 +172,7 @@ class PlayerController:
                     best_first_dir = DIR_MAP[(dr, dc)]
                     break
             if best_first_dir is None:
-                self.last_dir = Direction.UP
                 return Action.Move(Direction.UP)
-
-        self.last_dir = best_first_dir
 
         actions: List = []
         actions.append(Action.Move(best_first_dir))
