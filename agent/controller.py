@@ -17,6 +17,18 @@ class PlayerController:
         self.opp = -player_parity
 
     def bid(self, board: Board, player_parity: int, time_left: Callable) -> int:
+        # Bid more when hills are close (initiative matters for capture)
+        me = board.get_player(player_parity)
+        min_hill_dist = 999
+        for hill in board.hills.values():
+            if hill.controller_parity == 0:
+                for loc in hill.cells:
+                    d = abs(me.loc.r - loc.r) + abs(me.loc.c - loc.c)
+                    min_hill_dist = min(min_hill_dist, d)
+        if min_hill_dist <= 5:
+            return 5
+        elif min_hill_dist <= 10:
+            return 3
         return 1
 
     def play(
