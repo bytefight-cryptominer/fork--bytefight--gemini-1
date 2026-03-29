@@ -136,6 +136,13 @@ class PlayerController:
 
             if cell.owner_parity == 0 and priority < -900:
                 priority = 900 - depth * 20
+                # Connected territory bonus: prefer cells next to our paint
+                for dr2, dc2 in DR:
+                    cr, cc = r + dr2, c + dc2
+                    if 0 <= cr < rows and 0 <= cc < cols:
+                        if board.cells[cr][cc].owner_parity == player_parity:
+                            priority += 25
+                            break
 
             if cell.owner_parity == self.opp and priority < -900:
                 d_opp = mdist(r, c, opp_r, opp_c)
@@ -203,13 +210,6 @@ class PlayerController:
                 pscore += 150
             if pcell.owner_parity == 0:
                 pscore += 100
-                # Bonus for contested frontier (adjacent to opponent territory)
-                for dr2, dc2 in DR:
-                    fr, fc = pr + dr2, pc + dc2
-                    if 0 <= fr < rows and 0 <= fc < cols:
-                        if board.cells[fr][fc].owner_parity == self.opp:
-                            pscore += 50
-                            break
             else:
                 pscore += 10
             paint_candidates.append((pscore, pr, pc))
