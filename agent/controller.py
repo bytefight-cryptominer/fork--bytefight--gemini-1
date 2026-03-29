@@ -1,6 +1,7 @@
 from collections.abc import Callable, Iterable
 from collections import deque
 from typing import Union, List
+import random
 
 from game import *
 
@@ -34,6 +35,7 @@ class PlayerController:
         opp_stamina = opp.stamina
 
         DR = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        random.shuffle(DR)  # Break directional bias in BFS tiebreaks
         DIR_MAP = {(-1, 0): Direction.UP, (1, 0): Direction.DOWN,
                    (0, -1): Direction.LEFT, (0, 1): Direction.RIGHT}
         INV_DIR = {Direction.UP: (-1, 0), Direction.DOWN: (1, 0),
@@ -70,9 +72,9 @@ class PlayerController:
                     count += 1
             return count
 
-        # --- Erase step for opponent-painted cells ---
-        # Priority 1: Hill cells (always erase)
-        if stamina >= 55:
+        # --- Erase step for hill cells with opponent paint ---
+        # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
+        if stamina >= 55:  # 40 erase + 15 paint buffer
             for dr, dc in DR:
                 nr, nc = my_r + dr, my_c + dc
                 if not valid(nr, nc):
@@ -83,21 +85,6 @@ class PlayerController:
                     if nr == opp_r and nc == opp_c:
                         continue
                     return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
-        # Priority 2: Non-hill cells with 3+ layers when stamina is high
-        # (only worth erasing thick paint; thin paint is handled by regular steps)
-        if stamina >= 80:
-            for dr, dc in DR:
-                nr, nc = my_r + dr, my_c + dc
-                if not valid(nr, nc):
-                    continue
-                ecell = board.cells[nr][nc]
-                if (ecell.owner_parity == self.opp and abs(ecell.paint_value) >= 3 and
-                    not (ecell.hill_id and ecell.hill_id != 0)):
-                    if nr == opp_r and nc == opp_c:
-                        continue
-                    d_opp = mdist(nr, nc, opp_r, opp_c)
-                    if d_opp > SAFE_DIST:
-                        return [Action.Move(DIR_MAP[(dr, dc)], move_type=MoveType.ERASE)]
 
         # --- BFS ---
         best_first_dir = None
