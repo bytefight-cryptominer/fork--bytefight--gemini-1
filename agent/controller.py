@@ -86,7 +86,16 @@ class PlayerController:
                 if 0 <= nr < rows and 0 <= nc < cols:
                     if board.cells[nr][nc].owner_parity == player_parity:
                         local += 2
-        return territory + hills + local + me.stamina * 0.1
+        # Hill proximity bonus: closer to uncaptured hills = better
+        hill_proximity = 0
+        for hid, hill in board.hills.items():
+            if hill.controller_parity != player_parity and hid != 0:
+                for loc in hill.cells:
+                    if board.cells[loc.r][loc.c].owner_parity != player_parity:
+                        d = abs(me.loc.r - loc.r) + abs(me.loc.c - loc.c)
+                        hill_proximity = max(hill_proximity, 100 - d * 5)
+                        break
+        return territory + hills + local + me.stamina * 0.1 + hill_proximity
 
     def play(
         self,
@@ -202,7 +211,7 @@ class PlayerController:
 
         # --- Forecast-based direction selection ---
         # If BFS found a high-priority target (hill/powerup), use BFS direction
-        if bfs_priority >= 1000 and bfs_dir is not None:
+        if bfs_priority >= 1500 and bfs_dir is not None:
             actions = self._build_actions(board, player_parity, bfs_dir, my_r, my_c, stamina)
             if actions:
                 return actions
