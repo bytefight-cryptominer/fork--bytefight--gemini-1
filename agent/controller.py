@@ -70,6 +70,16 @@ class PlayerController:
                     count += 1
             return count
 
+        # --- Active pursuit: chase opponent for collision kill when advantageous ---
+        d_to_opp = mdist(my_r, my_c, opp_r, opp_c)
+        if stamina > 50 and d_to_opp <= 3 and d_to_opp > 0:
+            opp_cell_owner = cell_owner(opp_r, opp_c)
+            if opp_cell_owner != self.opp:  # neutral or ours - we'd win collision
+                for dr, dc in DR:
+                    nr, nc = my_r + dr, my_c + dc
+                    if valid(nr, nc) and mdist(nr, nc, opp_r, opp_c) < d_to_opp:
+                        return [Action.Move(DIR_MAP[(dr, dc)])]
+
         # --- Erase step for hill cells with opponent paint ---
         # Erase opponent-painted hill cells: both attacking (uncaptured) and defending (ours)
         if stamina >= 55:  # 40 erase + 15 paint buffer
