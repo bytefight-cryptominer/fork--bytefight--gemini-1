@@ -133,13 +133,16 @@ class PlayerController:
                     count += 1
             return count
 
+        avg_dim = (rows + cols) / 2
+        base_safe = max(2, min(5, int(avg_dim / 4)))
+        
         stamina_diff = stamina - opp_stamina
         if stamina_diff > 30:
-            SAFE_DIST = 3
+            SAFE_DIST = max(1, base_safe - 2)
         elif stamina_diff < -30:
-            SAFE_DIST = 6
+            SAFE_DIST = base_safe + 1
         else:
-            SAFE_DIST = 5
+            SAFE_DIST = base_safe
 
         # --- Erase step for hill cells with opponent paint ---
         if stamina >= 55:
