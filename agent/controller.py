@@ -203,6 +203,13 @@ class PlayerController:
                 pscore += 150
             if pcell.owner_parity == 0:
                 pscore += 100
+                # Contested frontier bonus (adjacent to opponent)
+                for dr2, dc2 in DR:
+                    fr, fc = pr + dr2, pc + dc2
+                    if 0 <= fr < rows and 0 <= fc < cols:
+                        if board.cells[fr][fc].owner_parity == self.opp:
+                            pscore += 50
+                            break
             else:
                 pscore += 10
             paint_candidates.append((pscore, pr, pc))
